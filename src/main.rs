@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .expect("failed to read data from socket");
 
                 if n == 0 {
-                    return;
+                    break;
                 }
 
                 socket
