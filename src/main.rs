@@ -1,7 +1,8 @@
 use std::env;
 use std::error::Error;
 use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::TcpListenerStream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -10,29 +11,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| "0.0.0.0:23232".to_string());
 
     let listener = TcpListener::bind(&addr).await?;
-    println!("Listening on: {}", addr);
 
-    loop {
-        let (mut socket, _) = listener.accept().await?;
+    let _ = tokio::spawn(async move {
+        let mut incoming = TcpListenerStream::new(listener);
 
-        tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
+        while let Some(mut stream) = incoming.next().await.transpose().unwrap() {
+            let (mut r, mut w) = stream.split();
 
-            loop {
-                let n = socket
-                    .read(&mut buf)
-                    .await
-                    .expect("failed to read data from socket");
+            println!("copied {} bytes", tokio::io::copy(&mut r, &mut w).await.unwrap());
+        }
+    }).await;
 
-                if n == 0 {
-                    break;
-                }
-
-                socket
-                    .write_all(&buf[0..n])
-                    .await
-                    .expect("failed to write data to socket");
-            }
-        });
-    }
+    Ok(())
 }
